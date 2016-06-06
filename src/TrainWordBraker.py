@@ -52,6 +52,9 @@ def make_word_dict():
     for word, freq in word2freq.items():
         if freq > 1:
             words.append(word)
+    for f in [dict_file]:
+        for w in open(f):
+            words.append(w) 
     words = set(words)
     return words
 
@@ -385,6 +388,7 @@ if __name__ == '__main__':
     ini.read(ini_file)
     train_file = ini.get('Data', 'train')
     test_file = ini.get('Data', 'test')
+    dict_file = ini.get('Data', 'dict')
     result_raw = ini.get('Result', 'raw')
     config_file = ini.get('Result', 'config')
     evaluation = ini.get('Result', 'evaluation')
