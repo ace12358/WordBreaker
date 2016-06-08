@@ -345,8 +345,8 @@ def epoch_test(char2id, model, epoch):
     os.system('rm temp')
         #print('predict sequence:', ''.join(label2seq(x,dists)))
         #print('true sequence***:', line.strip())
-    pickle.dump(model, open(cur_model_file, 'wb'))
-
+    with open(cur_model_file, 'wb') as o:
+        pickle.dump(model, o)
 
 def get_onehot(num):
     return chainer.Variable(np.array([num], dtype=np.int32))
