@@ -43,7 +43,7 @@ def make_vocab():
 def make_word_dict():
     words = list()
     word2freq = defaultdict(lambda:0)
-    for f in [train_file, test_file]:
+    for f in [train_file]:
     #for f in [train_file]:
         for line in open(f):
             ws = (line.rstrip().split(' '))
@@ -345,7 +345,7 @@ def epoch_test(char2id, model, epoch):
     os.system('rm temp')
         #print('predict sequence:', ''.join(label2seq(x,dists)))
         #print('true sequence***:', line.strip())
-    pickle.dump(model, open(cur_model_file, 'wb'), -1)
+    pickle.dump(model, open(cur_model_file, 'wb'))
 
 
 def get_onehot(num):
