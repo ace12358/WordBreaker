@@ -20,24 +20,8 @@ from collections import defaultdict
 
 
 def make_vocab():
-    vocab = dict()
-    for f in [train_file, test_file]:
-        for line in open(f):
-            sent = list(''.join(line.rstrip().split(' ')))
-            for i in range(window//2 + 3-1):
-                sent.append('</s>')
-                sent.insert(0,'<s>')
-            for i in range(3-1, len(sent)-(3-1)+2):
-                uni_gram = sent[i]
-                bi_gram = sent[i-1] + sent[i]
-                tri_gram = sent[i-2] + sent[i-1] + sent[i]
-                if uni_gram not in vocab:
-                    vocab[uni_gram] = len(vocab)
-                if bi_gram not in vocab:
-                    vocab[bi_gram] = len(vocab)
-                if tri_gram not in vocab:
-                   vocab[tri_gram] = len(vocab)
-    vocab['UNK'] = len(vocab) 
+    with open(char2id_file, 'rb') as char2id:
+        vocab = pickle.load(char2id)
     return vocab
 
 def make_word_dict():
@@ -54,7 +38,7 @@ def make_word_dict():
             words.append(word)
     for f in [dict_file]:
         for w in f:
-            words.append(w)
+            words.append(w.rstrip())
     words = set(words)
     return words
 
@@ -296,6 +280,8 @@ if __name__ == '__main__':
     config_file = ini.get('Result', 'config')
     evaluation = ini.get('Result', 'evaluation')
     model_file = ini.get('Result', 'model')
+    char2id_file = ini.get('Result', 'char2id')
+    odel_file = ini.get('Result', 'model') 
     window = int(ini.get('Parameters', 'window'))
     embed_units = int(ini.get('Parameters', 'embed_units'))
     char_type_embed_units = int(ini.get('Parameters', 'char_type_embed_units'))
