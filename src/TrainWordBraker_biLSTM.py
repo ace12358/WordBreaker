@@ -2,7 +2,7 @@
 
 '''
 Usage:
-python jws_lstm.py config.ini
+python ***.py config.ini
 '''
 
 import sys
@@ -163,6 +163,81 @@ def make_label(sent):
             pre_char = char
     return labels
 
+def back_rnn(x):
+    # make input window vector
+    distance =  window // 2
+    s_num = 3-1 + window // 2
+    x = list(x)
+    sent_length = len(x)
+    back_rnns = list()
+
+    for i in range(s_num):
+        x.append('</s>')
+        x.insert(0,'<s>')
+    hidden = chainer.Variable(np.zeros((1, hidden_units),\
+                                                dtype=np.float32))
+    prev_c = chainer.Variable(np.zeros((1, hidden_units),\
+                                                     dtype=np.float32))
+    target = sent_length
+    for cha_num in range(sent_length):
+        char_vecs = list()
+        char_type_vecs = list()
+        for i in range(-distance, distance+1):
+        # make char vector 
+            # import char
+            uni_gram = x[target+s_num+i]
+            bi_gram = x[target+s_num-1+i] + x[target+s_num+i]
+            tri_gram = x[target+s_num-2+i] + x[target+s_num-1+i] + x[target+s_num+i]
+            # char2id
+            uni_gram_id = char2id[uni_gram]
+            bi_gram_id = char2id[bi_gram]
+            tri_gram_id = char2id[tri_gram]
+            # id 2 embedding
+            uni_gram_vec = model.embed(get_onehot(uni_gram_id))
+            bi_gram_vec = model.embed(get_onehot(bi_gram_id))
+            tri_gram_vec = model.embed(get_onehot(tri_gram_id))
+            # add all char_vec
+            char_vecs.append(uni_gram_vec)
+            char_vecs.append(bi_gram_vec)
+            char_vecs.append(tri_gram_vec)
+        # make char type vector 
+            # import char type
+            uni_gram_type = make_char_type(uni_gram)
+            bi_gram_type = make_char_type(x[target+s_num-1+i]) + make_char_type(x[target+s_num+i])
+            tri_gram_type = make_char_type(x[target+s_num-2+i]) + make_char_type(x[target+s_num+i] + make_char_type(x[target+s_num-2+i]))
+            # chartype 2 id
+            uni_gram_type_id = char_type2id[uni_gram_type]
+            bi_gram_type_id =  char_type2id[bi_gram_type]
+            tri_gram_type_id = char_type2id[tri_gram_type]
+            # id 2 embedding
+            uni_gram_type_vec = model.char_type_embed(get_onehot(uni_gram_type_id))
+            bi_gram_type_vec = model.char_type_embed(get_onehot(bi_gram_type_id))
+            tri_gram_type_vec = model.char_type_embed(get_onehot(tri_gram_type_id))
+            # add all char_type_vec
+            char_type_vecs.append(uni_gram_type_vec)
+            char_type_vecs.append(bi_gram_type_vec)
+            char_type_vecs.append(tri_gram_type_vec)
+
+        char_concat = F.concat(tuple(char_vecs))
+        char_type_concat = F.concat(tuple(char_type_vecs))
+        #dropout_concat = F.dropout(concat, ratio=dropout_rate, train=train_flag)
+        concat = F.concat((char_concat, char_type_concat))
+        concat = F.concat((concat, hidden))
+        i_gate = F.sigmoid(model.i_gate(concat))
+        f_gate = F.sigmoid(model.f_gate(concat))
+        o_gate = F.sigmoid(model.o_gate(concat))
+        concat = F.concat((hidden, i_gate, f_gate, o_gate))
+        prev_c, hidden = F.lstm(prev_c, concat)
+        #output = model.output(F.concat((hidden, dict_vec)))
+        #dist = F.softmax(output)
+        #print(dist.data, label, np.argmax(dist.data))
+        #correct = get_onehot(label)
+        #print(output.data, correct.data)
+        back_rnns.append(hidden)
+        target -= 1
+    return back_rnns
+
+    
 
 def train(char2id, model, optimizer):
     print('####Training####')
@@ -180,9 +255,10 @@ def train(char2id, model, optimizer):
                                                  line_cnt), '\r', end='')
             x = ''.join(line.strip().split())
             t = make_label(line.strip())
+            back_rnns = back_rnn(x)
             for target in range(len(x)):
                 label = t[target]
-                pred, loss = forward_one(x, target, label, hidden, prev_c, word_dict, True)
+                pred, loss = forward_one(x, target, label, hidden, prev_c, word_dict,back_rnns, True)
                 accum_loss += loss
             batch_count += 1
             if batch_count == batch_size:
@@ -204,7 +280,7 @@ def train(char2id, model, optimizer):
         epoch_test(char2id, model, epoch)
     print('\nTraining Done!')
 
-def forward_one(x, target, label, hidden, prev_c, word_dict, train_flag):
+def forward_one(x, target, label, hidden, prev_c, word_dict,back_rnns, train_flag):
     # make dict feature vector
     dict_vec = list()
     L1 = L2 = L3 = L4 = R1 = R2 = R3 = R4 = I1 = I2 = I3 = I4 = 0
@@ -306,6 +382,7 @@ def forward_one(x, target, label, hidden, prev_c, word_dict, train_flag):
     o_gate = F.sigmoid(model.o_gate(concat))
     concat = F.concat((hidden, i_gate, f_gate, o_gate))
     prev_c, hidden = F.lstm(prev_c, concat)
+    concat = F.concat((hidden, back_rnns[len(back_rnns)-target-s_num]))
     output = model.output(F.concat((hidden, dict_vec)))
     dist = F.softmax(output)
     #print(dist.data, label, np.argmax(dist.data))
@@ -329,10 +406,11 @@ def epoch_test(char2id, model, epoch):
         x = ''.join(line.strip().split())
         t = make_label(line.strip())
         dists = list()
+        back_rnns = back_rnn(x)
         for target in range(len(x)):
             label = t[target]
             labels.append(label)
-            dist, acc = forward_one(x, target, label, hidden, prev_c ,word_dict, train_flag=True)
+            dist, acc = forward_one(x, target, label, hidden, prev_c ,word_dict, back_rnns, train_flag=True)
             dists.append(dist)
         with open(result_file, 'a') as test:
             test.write("{0}\n".format(''.join(label2seq(x, dists))))
@@ -350,7 +428,6 @@ def epoch_test(char2id, model, epoch):
 
 def get_onehot(num):
     return chainer.Variable(np.array([num], dtype=np.int32))
-
 
 def label2seq(x, labels):
     seq = list()
